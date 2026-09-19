@@ -1,0 +1,5 @@
+# dsh-bonk-pet bundle patch: inserts this plugin into a profile's layer stack.
+# Install with: dsh plugin --profile <name> add <path-or-git-url>
+- insert:
+    - id: bonk-pet
+      name: 'dsh-bonk-pet'

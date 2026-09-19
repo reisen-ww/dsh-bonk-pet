@@ -1,0 +1,7 @@
+﻿node_modules/
+*.log
+assets/e2e-live.png
+assets/preview-live.png
+assets/settings-live.png
+assets/bubble-check.png
+error报告.txt

@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>敲盆宠物 · 独立预览</title>
+<style>
+  :root{
+    --dsw-alias-bg-base:#0f1117;
+    --dsw-alias-bg-overlay:#1c1f28;
+    --dsw-alias-label-primary:#e8ecf4;
+    --dsw-alias-label-tertiary:#8b93a7;
+    --dsw-alias-border-l2:rgba(255,255,255,.14);
+    --dsw-alias-brand-primary:#3b82f6;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);
+    font-family:system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .fake-app{
+    width:min(760px,92vw);border:1px solid var(--dsw-alias-border-l2);
+    border-radius:14px;padding:26px 28px;background:#141720;
+  }
+  h1{margin:0 0 6px;font-size:19px;letter-spacing:.3px}
+  p.sub{margin:0 0 20px;color:var(--dsw-alias-label-tertiary);font-size:13px;line-height:1.6}
+  .row{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:14px}
+  button{
+    font:inherit;font-size:13px;padding:8px 15px;border-radius:9px;cursor:pointer;
+    border:1px solid var(--dsw-alias-border-l2);background:#1e222d;color:var(--dsw-alias-label-primary);
+    transition:transform .1s ease,background .15s ease;
+  }
+  button:hover{background:#262b38}
+  button:active{transform:translateY(1px)}
+  button.primary{background:#1d4ed8;border-color:#2563eb}
+  button.primary:hover{background:#2563eb}
+  .hint{
+    border-left:2px solid #2563eb;padding:9px 13px;margin-top:18px;
+    background:rgba(37,99,235,.09);border-radius:0 8px 8px 0;
+    font-size:12.5px;line-height:1.75;color:#b9c2d6;
+  }
+  .hint b{color:#e8ecf4}
+  code{background:rgba(255,255,255,.08);padding:1px 5px;border-radius:4px;font-size:12px}
+  .arrow{color:#60a5fa}
+</style>
+</head>
+<body>
+
+<div class="fake-app">
+  <h1>🔧 敲盆宠物 · 独立预览</h1>
+  <p class="sub">
+    这个页面不依赖 DSH，直接加载 <code>lib/client.js</code> 本体。<br>
+    右下角就是它 —— <b>先点它（或者它头上的铁盆）</b>，再点下面的「模拟执行出错」。
+  </p>
+
+  <div class="row">
+    <button class="primary" id="btn-run">🎤 开始任务（唱歌）</button>
+    <button id="btn-fail">💥 模拟执行出错（掉钢管）</button>
+    <button id="btn-knock">🥄 隔空敲 ×3</button>
+    <button id="btn-hungry">🍚 让它饿（测讨饭）</button>
+    <button id="btn-reset">♻️ 重置存档</button>
+  </div>
+
+  <div class="hint">
+    <b>能试出来的东西：</b><br>
+    <span class="arrow">→</span> <b>点「开始任务」</b>：它开始摇摆唱歌，飘音符（真实 DSH 里是 agent 一干活就唱）<br>
+    <span class="arrow">→</span> <b>点它或它头上的盆</b>：抖一下 + 冒台词，饱食度掉 12<br>
+    <span class="arrow">→</span> <b>连敲 3 下</b>：它跑去讨白饭（左边出现一碗饭）<br>
+    <span class="arrow">→</span> <b>连敲 6 下</b>：开始阴阳你<br>
+    <span class="arrow">→</span> <b>点那碗饭</b>：它跑过来吃掉<br>
+    <span class="arrow">→</span> <b>拖拽</b>：能挪位置，位置会记住<br>
+    <span class="arrow">→</span> 鼠标<b>悬停</b>在它身上：显示饱食度条 + 计数器<br>
+    <br>
+    <b>关于素材：</b>这个页面<b>会加载你真实的素材</b> —— 直接双击
+    <code>demo.html</code> 时读不到（浏览器不给本地网页读别的目录），
+    请用 <code>node tools/serve-demo.js</code> 起一个本地预览，
+    它会把你放在 <code>~/.dsh/bonk-pet/</code> 的歌和图喂进来。
+    <br>
+    唯一没有的是 <b>DSH 的事件流</b>：真实界面里 agent 一干活它就唱、
+    一出错就掉钢管，这里靠上面的按钮手动触发。
+  </div>
+</div>
+
+<script>
+// --- module loader stub: 捕获 factory，稍后手动 apply -----------------
+window.__ModuleLoader__ = {
+  load({ id, factory }) {
+    window.__bonkId = id
+    window.__bonkFactory = factory
+  },
+}
+
+// --- EventSource：能连真服务器就连，否则用桩 -------------------------
+// 用 `serve-demo.js` 打开时，/api/bonk-pet/events 是真的，插件因此能拿到
+// 真实的订阅行为；直接双击打开（file://）时连不上，退回桩，靠按钮投递。
+const liveSources = []
+const RealEventSource = window.EventSource
+window.EventSource = class PreviewEventSource {
+  constructor(url) {
+    this.url = url
+    this.closed = false
+    this._listeners = { message: [], error: [], open: [] }
+    liveSources.push(this)
+    // file:// 或没有预览服务器时，构造真实 EventSource 会立刻报错，所以先探一下。
+    if (location.protocol.startsWith('http')) {
+      try {
+        this._real = new RealEventSource(url)
+        this._real.addEventListener('message', (event) => {
+          for (const handler of this._listeners.message) handler(event)
+        })
+        this._real.addEventListener('open', () => {
+          for (const handler of this._listeners.open) handler({ type: 'open' })
+        })
+      } catch {
+        this._real = null
+      }
+    } else {
+      this._real = null
+    }
+  }
+  addEventListener(type, handler) {
+    (this._listeners[type] ||= []).push(handler)
+  }
+  close() {
+    this.closed = true
+    try { this._real?.close() } catch { /* already closed */ }
+  }
+  emit(payload) {
+    for (const handler of this._listeners.message) {
+      handler({ data: JSON.stringify(payload) })
+    }
+  }
+}
+
+/** 供按钮调用：投递一帧"任务开始/结束"。 */
+window.__bonkStatus = (status) => {
+  for (const source of liveSources) {
+    if (!source.closed) source.emit({ type: 'status', status, at: Date.now() })
+  }
+}
+
+/** 供按钮调用：投递一帧"执行出错"。 */
+window.__bonkFail = (payload) => {
+  const frame = payload || {
+    type: 'error',
+    kind: 'tool',
+    tool: 'pwsh',
+    message: 'TOOL_TIMEOUT',
+    at: Date.now(),
+  }
+  for (const source of liveSources) {
+    if (!source.closed) source.emit(frame)
+  }
+}
+</script>
+
+<!-- 插件本体 -->
+<script src="lib/client.js"></script>
+
+<script>
+// --- 用最简 ctx 启动它（等价于 DSH 里的 apply(ctx)） -------------------
+const petModule = window.__bonkFactory(() => {
+  throw new Error('dsh-bonk-pet injects nothing; no require expected')
+})
+petModule.apply({
+  effect(factory) {
+    const dispose = factory()
+    return dispose
+  },
+  on() {
+    return () => {}
+  },
+})
+
+// --- 预览控件 ---------------------------------------------------------
+const root = () => document.querySelector('[data-bonk-root]')
+const basin = () => root()?.querySelector('[data-bonk-basin]')
+
+let running = false
+document.getElementById('btn-run').addEventListener('click', (event) => {
+  running = !running
+  window.__bonkStatus(running ? 'running' : 'idle')
+  event.currentTarget.textContent = running ? '⏹ 结束任务（停止唱歌）' : '🎤 开始任务（唱歌）'
+})
+
+document.getElementById('btn-fail').addEventListener('click', () => {
+  window.__bonkFail()
+})
+
+document.getElementById('btn-knock').addEventListener('click', () => {
+  // 隔一会儿敲一下，模拟真人连点（否则会触发空中限流之外的连击逻辑）
+  for (let i = 0; i < 3; i += 1) {
+    setTimeout(() => basin()?.click(), i * 260)
+  }
+})
+
+document.getElementById('btn-hungry').addEventListener('click', () => {
+  // 直接把存档里的饱食度打到 0，然后敲一下触发讨饭分支
+  const key = 'dsh-bonk-pet/v1'
+  let state
+  try {
+    state = JSON.parse(localStorage.getItem(key)) || {}
+  } catch {
+    state = {}
+  }
+  state.food = 0
+  state.at = Date.now()
+  localStorage.setItem(key, JSON.stringify(state))
+  // 重新加载，让插件读到新的饱食度
+  location.reload()
+})
+
+document.getElementById('btn-reset').addEventListener('click', () => {
+  localStorage.removeItem('dsh-bonk-pet/v1')
+  location.reload()
+})
+</script>
+
+</body>
+</html>
