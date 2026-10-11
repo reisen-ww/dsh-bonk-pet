@@ -1,6 +1,6 @@
 {
   "name": "dsh-bonk-pet",
-  "version": "0.12.1",
+  "version": "0.12.2",
   "description": "敲盆宠物 —— DSH Web GUI 的悬浮小鲸鱼：agent 执行出错时从天上掉钢管砸它，你可以敲它的铁盆，敲完它会去讨白饭吃。",
   "type": "module",
   "main": "lib/index.js",

@@ -312,13 +312,18 @@ USLT : ABSENT   ← 也没有纯文本歌词
 cannot get property "slots" without inject
 ```
 
-`slots` 和 `settingsScope` 都是 Cordis 服务。声明的地方是**客户端 bundle 的
+`slots` 是 Cordis 服务。声明的地方是**客户端 bundle 的
 `inject` 导出**：
 
 ```js
-exports.inject = ['slots', 'settingsScope']   // 服务名，不是包名
+exports.inject = ['slots']   // 服务名，不是包名
 exports.apply = apply
 ```
+
+只声明**确实存在**的服务。早先这里多写了一个 `settingsScope`（内核已删除的服务），
+结果是整个前端 half 永远 pending（启动日志 `1 entry did not activate`），
+宿主判定启动失败后把 profile 重置，其它插件一起遭殃。**声明式 `inject` 里写一个
+不存在的服务，不是"降级"，是自杀。**
 
 踩错的地方：`package.json` 里的 `dsh.client.inject` **不是这个**，
 它装的是**包名**（模块图的排序边），填了没用。已经装好的第三方插件
@@ -542,9 +547,11 @@ node test/e2e.js http://127.0.0.1:43871 <token>
 
 **拖动**：直接拖鲸鱼可以把它挪到别处，位置存进 `localStorage`。
 
-**音量**：三个音量都能在 **设置 → 插件 → 插件配置** 里调（命名空间 `bonk-pet`）：
-唱歌 65%、钢管 34%、敲盆 50%。宿主端注册 schema，浏览器端贡献 `settings.plugin.item`
-卡片，两边通过 `/api/bonk-pet/volume` 对接。
+**音量**：三个音量都能在 **设置 → 插件** 里调：唱歌 65%、钢管 34%、敲盆 50%。
+插件往内核的 `settings.plugins.tab` slot 注册一个自己的标签页，滑块写
+`localStorage` 再 `POST /api/bonk-pet/volume` 交给宿主，两边这样对接。
+
+> 卡片同时注册了一份到一级导航 `settings.section`，作为兜底入口。
 
 > **钢管默认 34% 是有意的**：它是最吵的音效，早先硬编码成 0.7，用户反馈"太大声"。
 
